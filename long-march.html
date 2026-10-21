@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>红军长征地图动画</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --paper: #f4ecd8;
+            --ink: #2b2118;
+            --muted: #6b5a48;
+            --red: #d7261e;
+            --panel: rgba(250, 245, 232, 0.94);
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: 'Noto Serif SC', serif; }
+        #map { position: absolute; inset: 0; }
+        /* 给底图做旧，突出红色路线 */
+        #map .leaflet-tile-pane { filter: sepia(0.55) saturate(0.7) brightness(1.02); }
+
+        .lm-panel { position: absolute; z-index: 1000; background: var(--panel); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,0.18); }
+        #lm-header { top: 16px; left: 16px; padding: 14px 18px; max-width: 360px; }
+        #lm-header h1 { margin: 0; font-size: 24px; color: var(--red); letter-spacing: 2px; }
+        #lm-header .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+        #lm-date { font-size: 30px; font-weight: 700; margin-top: 10px; }
+        #lm-daycount { color: var(--muted); font-size: 14px; }
+        #lm-header a { color: var(--muted); font-size: 12px; }
+
+        #lm-card { top: 16px; right: 64px; width: 320px; padding: 14px 18px; }
+        #lm-card.hidden { display: none; }
+        .lm-flash { animation: lm-in 0.5s ease-out; }
+        @keyframes lm-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+        .lm-popup h3 { margin: 8px 0 2px; font-size: 18px; }
+        .lm-popup p { margin: 6px 0 0; font-size: 14px; line-height: 1.6; }
+        .lm-meta { color: var(--muted); font-size: 12px; }
+        .lm-tag { display: inline-block; color: #fff; font-size: 12px; padding: 1px 8px; border-radius: 10px; }
+
+        #lm-logwrap { left: 16px; top: 220px; bottom: 110px; width: 230px; padding: 10px 0; overflow-y: auto; }
+        #lm-log { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+        #lm-log li { display: flex; align-items: center; gap: 6px; padding: 5px 14px; cursor: pointer; }
+        #lm-log li:hover { background: rgba(215, 38, 30, 0.08); }
+        .lm-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+        .lm-log-date { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+        #lm-controls { left: 50%; transform: translateX(-50%); bottom: 24px; width: min(760px, calc(100% - 32px)); padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 14px; }
+        #lm-controls button { background: var(--red); color: #fff; border: 0; border-radius: 6px; padding: 6px 16px; font: inherit; cursor: pointer; }
+        #lm-controls button.secondary { background: transparent; color: var(--red); border: 1px solid var(--red); }
+        #lm-slider { flex: 1 1 200px; accent-color: var(--red); }
+        #lm-controls select { font: inherit; }
+        #lm-note { width: 100%; color: var(--muted); font-size: 11px; }
+
+        .lm-head { display: flex; align-items: center; justify-content: center; }
+        .lm-head span { display: block; width: 28px; height: 28px; line-height: 28px; text-align: center; color: #ffd700; background: var(--red); border-radius: 50%; font-size: 16px; box-shadow: 0 0 0 0 rgba(215,38,30,0.6); animation: lm-pulse 1.6s infinite; }
+        @keyframes lm-pulse { 0% { box-shadow: 0 0 0 0 rgba(215,38,30,0.6); } 70% { box-shadow: 0 0 0 14px rgba(215,38,30,0); } 100% { box-shadow: 0 0 0 0 rgba(215,38,30,0); } }
+        .lm-label { background: transparent; border: 0; box-shadow: none; font-family: 'Noto Serif SC', serif; font-weight: 600; color: var(--ink); text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+        .lm-label::before { display: none; }
+
+        @media (max-width: 720px) {
+            #lm-header { right: 60px; max-width: none; padding: 10px 14px; }
+            #lm-header h1 { font-size: 20px; }
+            #lm-date { font-size: 22px; margin-top: 4px; }
+            #lm-logwrap { display: none; }
+            #lm-card { top: auto; right: 16px; left: 16px; bottom: 210px; width: auto; max-height: 28vh; overflow-y: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div id="lm-header" class="lm-panel">
+        <h1 id="lm-title">中央红军长征</h1>
+        <div id="lm-subtitle" class="sub">加载中…</div>
+        <div id="lm-date">—</div>
+        <div id="lm-daycount"></div>
+        <a href="index.html">← 返回世界历史地图</a>
+    </div>
+
+    <div id="lm-card" class="lm-panel hidden"></div>
+
+    <div id="lm-logwrap" class="lm-panel">
+        <ul id="lm-log"></ul>
+    </div>
+
+    <div id="lm-controls" class="lm-panel">
+        <button id="lm-play">播放</button>
+        <button id="lm-restart" class="secondary">重播</button>
+        <input id="lm-slider" type="range" value="0">
+        <label>速度
+            <select id="lm-speed">
+                <option value="4">慢</option>
+                <option value="12" selected>中</option>
+                <option value="30">快</option>
+            </select>
+        </label>
+        <label><input id="lm-follow" type="checkbox" checked> 镜头跟随</label>
+        <div id="lm-note"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script type="module" src="js/long-march.js"></script>
+</body>
+</html>
